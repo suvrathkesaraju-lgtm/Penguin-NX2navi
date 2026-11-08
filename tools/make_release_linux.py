@@ -8,7 +8,7 @@ The same model as the Windows release (tools/make_release.py, whose download cac
 folder carries the setup and a toolchain, never game code; the player's machine builds the game. Everything that runs on
 the player's machine is built against the Steam Runtime 3 "sniper" SDK sysroot (glibc 2.31), so the AppImage and the
 game it builds run on SteamOS and on any distribution at least as new. Needs network access on the first run, make,
-the .NET 10 SDK and Python 3.12+ with Pillow (.venv). The folder holds:
+meson, the .NET 10 SDK and Python 3.12+ with Pillow (.venv). The folder holds:
 
     python/    python-build-standalone 3.14 (with tkinter) + the packages of tools/requirements-installer.txt; a .pth
                file puts the folder, tools/ and recomp/ on sys.path
@@ -16,14 +16,16 @@ the .NET 10 SDK and Python 3.12+ with Pillow (.venv). The folder holds:
                sysroot the game's compile and link read, nothing else (recorded while building the runtime library)
     runtime/   libnx2navirt.a and libnx2navirt-v2.a (build_game.py --make-runtime-lib --sysroot, x86-64-v3 and v2), the
                runtime headers, romfs.c, patches.c and ov_zstd.c (compiled per install), nx2navi.png (the window icon),
-               deps/ (Vulkan headers 1.4.363, VMA, zstd built static; SDL3, Opus and libvpx come from the sysroot)
+               deps/ (Vulkan headers 1.4.363, VMA, zstd and dav1d built static; SDL3, Opus and libvpx come from the
+               sysroot)
     bin/       nx2navi_xlate (+ .id), hactool, ninja, libSDL3.so.0 (the sysroot's; the game finds it beside itself)
     recomp/, tools/, data/, installer/, licenses/, THIRD_PARTY_NOTICES.md, nx2navi.ini.example, VERSION
     AppRun, nx2navi-setup.desktop, nx2navi-setup.png   the AppImage entry: python/bin/python3 -m installer.gui
 
 --appimage packs the folder with appimagetool and the static type-2 runtime (no libfuse2 on the host). --prove compiles
 the generated C and links build/release-linux-check/nx2navi with the folder's tools only, then runs the probes beside it.
-Like tools/make_release.py, both need one game version extracted and lifted first (generated/v121, else v143).
+Like tools/make_release.py, both need one game version extracted and lifted first (generated/v121, v143, v111 or
+v110; a version tools/data does not ship passes --expected with its local hashes).
 
 The folder contains nothing derived from the game: check_content runs over it before the script finishes, then the
 folder's own python runs a check-only installer pass and the window's --selftest.
@@ -45,6 +47,21 @@ ROOT = mr.ROOT
 MAIN_ROOT = mr.MAIN_ROOT
 WORK = mr.WORK
 CHECK = MAIN_ROOT / 'build' / 'release-linux-check'
+
+
+def lifted_version():
+    """The game version whose generated C the runtime library and --prove build against. The shipped releases use
+    1.2.1 or 1.4.3; a machine that only has its own dump may lift another supported version (1.1.1, 1.1.0). All of them
+    share the layout constants the prebuilt library reads (MOD_MAIN_BASE, MOD_COUNT)."""
+    for version in ('v121', 'v143', 'v111', 'v110'):
+        if (MAIN_ROOT / 'generated' / version / 'layout.json').is_file():
+            return version
+    mr.lifted_version()
+
+
+def expected_arg(path):
+    """--expected for build_game.py when the version's hashes are local (not in tools/data)."""
+    return ['--expected', str(Path(path).resolve())] if path else []
 
 LLVM_VERSION = '23.1.4'
 LLVM_MAJOR = LLVM_VERSION.split('.')[0]
@@ -69,6 +86,8 @@ PINS = {
                     '5749cbc4e668273514150a80e387a957f933c6ed3f5f11e03fb30955e2bbead6'),
     'zstd-src': ('https://github.com/facebook/zstd/releases/download/v1.5.7/zstd-1.5.7.tar.gz',
                  'eb33e51f49a15e023950cd7825ca74a4a2b43db8354825ac24fc1b7ee09e6fa3'),
+    'dav1d-src': ('https://github.com/videolan/dav1d/archive/refs/tags/1.5.1.tar.gz',
+                  'fa635e2bdb25147b1384007c83e15de44c589582bb3b9a53fc1579cb9d74b695'),
     'vulkan-headers-src': ('https://github.com/KhronosGroup/Vulkan-Headers/archive/refs/tags/v1.4.363.tar.gz',
                            'cbaf687d3c59b9666fe080e7f8396b6b4f4d344a768ee6b337c59852f4526b68'),
     'vma-header': build_game.VMA_FETCH,
@@ -93,9 +112,9 @@ SNIPER_MEMBERS = ['usr/include', 'usr/share/pkgconfig', 'usr/lib/x86_64-linux-gn
 # glibc's link libraries and their scripts (lib<name>.so, .a, _nonshared.a), and the GCC runtime pieces clang links.
 GLIBC_LIBS = ['c', 'm', 'mvec', 'dl', 'pthread', 'rt', 'util']
 GCC_LIBS = {'libgcc.a', 'libgcc_eh.a', 'libgcc_s.so', 'libstdc++.a', 'libsupc++.a'}
-# The libraries of a release link (build_game.py LINK_LIBS with --deps: Opus, libvpx and zstd static).
-RELEASE_LIBS = ['-lvulkan', '-lSDL3', '-l:libopus.a', '-l:libvpx.a', '-l:libzstd.a', '-l:libstdc++.a', '-lm',
-                '-lpthread', '-ldl']
+# The libraries of a release link (build_game.py LINK_LIBS with --deps: Opus, libvpx, zstd and dav1d static).
+RELEASE_LIBS = ['-lvulkan', '-lSDL3', '-l:libopus.a', '-l:libvpx.a', '-l:libzstd.a', '-l:libdav1d.a',
+                '-l:libstdc++.a', '-lm', '-lpthread', '-ldl']
 
 
 def run(cmd, **kw):
@@ -163,6 +182,35 @@ def sysroot_cc(llvm, sysroot):
     return f'{llvm / "bin" / "clang"} --target=x86_64-linux-gnu --sysroot={sysroot} -fuse-ld=lld'
 
 
+def build_dav1d(llvm, sysroot, d):
+    """dav1d (BSD-2-Clause) static: ov_movie2.c decodes the title's AV1 movies on the host. Build the C decoder only,
+    which keeps the release build free of nasm; decoding runs on the movie thread, never on a game thread."""
+    src = tar_extract('dav1d-src', WORK / 'dav1d', ['dav1d-1.5.1'], strip=1)
+    build = WORK / 'dav1d-build'
+    cross = WORK / 'dav1d-cross.ini'
+    cross.write_text(
+        f"[binaries]\nc = '{llvm / 'bin' / 'clang'}'\nar = '{llvm / 'bin' / 'llvm-ar'}'\n"
+        f"strip = '{llvm / 'bin' / 'llvm-strip'}'\n\n[built-in options]\n"
+        f"c_args = ['--target=x86_64-linux-gnu', '--sysroot={sysroot}']\n"
+        f"c_link_args = ['--target=x86_64-linux-gnu', '--sysroot={sysroot}', '-fuse-ld=lld']\n\n"
+        f"[host_machine]\nsystem = 'linux'\ncpu_family = 'x86_64'\ncpu = 'x86_64'\nendian = 'little'\n",
+        encoding='utf-8')
+    ninja = mr.unpack('ninja-linux') / 'ninja'
+    ninja.chmod(0o755)
+    env = {**os.environ, 'PATH': f'{ninja.parent}{os.pathsep}{os.environ.get("PATH", "")}'}
+    if not (build / 'build.ninja').is_file():
+        shutil.rmtree(build, ignore_errors=True)
+        run(['meson', 'setup', build, src, '--cross-file', cross, '--default-library=static', '--buildtype=release',
+             '--backend=ninja', '-Denable_asm=false', '-Denable_tools=false', '-Denable_tests=false',
+             '-Denable_examples=false', '--prefix=/usr'], env=env)
+    run([ninja, '-C', build], env=env)
+    shutil.copy2(build / 'src' / 'libdav1d.a', d / 'lib' / 'libdav1d.a')
+    inc = d / 'include' / 'dav1d'
+    inc.mkdir(parents=True, exist_ok=True)
+    for h in (src / 'include' / 'dav1d').glob('*.h'):
+        shutil.copy2(h, inc / h.name)
+
+
 # ---- runtime/deps, bin/ --------------------------------------------------------------------------------------------
 
 def build_deps(out, llvm, sysroot):
@@ -182,6 +230,7 @@ def build_deps(out, llvm, sysroot):
     shutil.copy2(lib / 'libzstd.a', d / 'lib' / 'libzstd.a')
     for name in ('zstd.h', 'zstd_errors.h'):
         shutil.copy2(lib / name, d / 'include' / name)
+    build_dav1d(llvm, sysroot, d)
 
 
 def build_bin(out, llvm, sysroot):
@@ -204,16 +253,16 @@ def build_bin(out, llvm, sysroot):
 
 # ---- runtime/ ----------------------------------------------------------------------------------------------------------
 
-def runtime_lib(out, llvm, sysroot):
+def runtime_lib(out, llvm, sysroot, expected=None):
     """libnx2navirt.a (x86-64-v3) and libnx2navirt-v2.a (x86-64-v2), so a machine without AVX2 can install too."""
-    version = mr.lifted_version()
+    version = lifted_version()
     rt = out / 'runtime'
     for cpu, name in (('v3', 'libnx2navirt.a'), ('v2', 'libnx2navirt-v2.a')):
         build = CHECK / f'rtlib-{cpu}'
         shutil.rmtree(build, ignore_errors=True)
         run([sys.executable, ROOT / 'tools' / 'build_game.py', '--make-runtime-lib', '--toolchain', llvm,
              '--sysroot', sysroot, '--cpu', cpu, '--deps', out / 'runtime' / 'deps', '--ninja', out / 'bin' / 'ninja',
-             '--version', version, '--gen', MAIN_ROOT / 'generated' / version, '--out', build])
+             '--version', version, '--gen', MAIN_ROOT / 'generated' / version, '--out', build, *expected_arg(expected)])
         shutil.copy2(build / 'libnx2navirt.a', rt / name)
     for p in sorted((ROOT / 'runtime').rglob('*')):
         if p.suffix in mr.RUNTIME_SUFFIXES and p.is_file():
@@ -404,6 +453,7 @@ def collect_licenses(out, sysroot):
         (doc / 'libxrender1' / 'copyright', 'libXrender-copyright.txt'),
         (WORK / 'vulkan-headers' / 'LICENSE.md', 'vulkan-headers-LICENSE.txt'),
         (WORK / 'zstd' / 'LICENSE', 'zstd-LICENSE.txt'),
+        (WORK / 'dav1d' / 'COPYING', 'dav1d-COPYING.txt'),
         (out / 'python' / 'lib' / f'python{sys_version(out)}' / 'LICENSE.txt', 'python-LICENSE.txt'),
         (ROOT / 'runtime' / 'shaders' / 'ffx' / 'LICENSE.txt', 'FidelityFX-FSR-LICENSE.txt'),
         (WORK / 'hactool-linux' / 'LICENSE', 'hactool-LICENSE.txt'),
@@ -523,10 +573,10 @@ def check_bundle(out):
     print('bundle check: the window built every screen in both languages and closed')
 
 
-def prove(out, cpu='v3'):
+def prove(out, cpu='v3', expected=None):
     """Compile the generated C and link nx2navi with the folder's tools only, then run the probes beside it."""
     out = out.resolve()
-    version = mr.lifted_version()
+    version = lifted_version()
     gen = MAIN_ROOT / 'generated' / version
     ext = MAIN_ROOT / 'build' / 'extracted' / version
     chk = CHECK / 'game'
@@ -536,8 +586,8 @@ def prove(out, cpu='v3'):
          '--sysroot', out / 'llvm' / 'sysroot', '--deps', out / 'runtime' / 'deps', '--runtime', out / 'runtime',
          '--runtime-lib', out / 'runtime' / ('libnx2navirt-v2.a' if cpu == 'v2' else 'libnx2navirt.a'),
          '--ninja', out / 'bin' / 'ninja', '--version', version,
-         '--gen', gen, '--out', chk, '--exefs', ext / 'exefs', '--romfs', ext / 'romfs', '--profile', chk / 'profile'],
-        env=env)
+         '--gen', gen, '--out', chk, '--exefs', ext / 'exefs', '--romfs', ext / 'romfs', '--profile', chk / 'profile',
+         *expected_arg(expected)], env=env)
     print(f'prove: build {time.time() - t0:.0f} s')
     shutil.copy2(out / 'bin' / 'libSDL3.so.0', chk / 'libSDL3.so.0')
     needed = subprocess.run(['readelf', '-d', str(chk / 'nx2navi')], capture_output=True, text=True).stdout
@@ -564,10 +614,12 @@ def main():
     ap.add_argument('--prove', action='store_true', help='only run the compile-and-probe check on an existing folder')
     ap.add_argument('--cpu', choices=('v2', 'v3'), default='v3',
                     help='--prove: build and run the check for this CPU level (default v3)')
+    ap.add_argument('--expected', type=Path,
+                    help='expected hashes of the lifted version when tools/data has none for it (a local dump)')
     args = ap.parse_args()
     out = args.out.resolve()
     if args.prove:
-        prove(out, args.cpu)
+        prove(out, args.cpu, args.expected)
         return
     if out.exists():
         shutil.rmtree(out)
@@ -576,7 +628,7 @@ def main():
     sysroot = full_sysroot()
     build_deps(out, llvm, sysroot)
     build_bin(out, llvm, sysroot)
-    rtlib = runtime_lib(out, llvm, sysroot)
+    rtlib = runtime_lib(out, llvm, sysroot, args.expected)
     build_sysroot(out, sysroot, used_sysroot_files(out, llvm, sysroot, rtlib))
     build_python(out, llvm, sysroot)
     mr.build_sources(out, {})   # no profiles: the Linux setup compiles without one (installer/layout.py, pgo_dir)

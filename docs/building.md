@@ -54,8 +54,8 @@ hactool reads `-k <prod.keys>`; MSYS2 shells set `HOME`, which hides its default
 ## Build
 
 From the repository root, in PowerShell. Every step that depends on the game version takes it as `<ver>`: `v143` for
-1.4.3, `v121` for 1.2.1 or `v110` for 1.1.0. The tools default to `v121` when `--version` is left out. Saves load on any
-of them.
+1.4.3, `v121` for 1.2.1, `v111` for 1.1.1 or `v110` for 1.1.0. The tools default to `v121` when `--version` is left
+out. Saves load on any of them.
 
 1. Python environments (once). `.venv` runs the lifter and the build; `.venv-py314` runs the extraction scripts, which
    need the stdlib `compression.zstd` of Python 3.14:
@@ -187,7 +187,8 @@ Vega 7 of a Ryzen 5 4600G at about 34 fps). Long play sessions and the Steam Dec
 
 The players' Linux release is the setup AppImage of [installer.md](installer.md) ("Linux release"):
 `tools/make_release_linux.py` assembles it from the same installer and the runtime library, built against the Steam
-Runtime 3 sysroot, and packs it with appimagetool.
+Runtime 3 sysroot, and packs it with appimagetool. It builds dav1d static with meson for the AV1 movies and takes
+`--expected` for a game version whose hashes `tools/data` does not carry.
 
 Requirements:
 
@@ -196,7 +197,7 @@ Requirements:
 - Packages on Arch:
 
   ```sh
-  pacman -S --needed clang lld ninja make sdl3 opus libvpx zstd vulkan-headers vulkan-icd-loader \
+  pacman -S --needed clang lld ninja make meson sdl3 opus libvpx zstd vulkan-headers vulkan-icd-loader \
       vulkan-validation-layers shaderc spirv-tools dotnet-sdk uv git
   ```
 

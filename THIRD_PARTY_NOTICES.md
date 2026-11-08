@@ -98,6 +98,7 @@ folder's `licenses/` and in each component's own folder.
 | Vulkan-Headers 1.4.363 (source tag) | https://github.com/KhronosGroup/Vulkan-Headers/tree/v1.4.363 | Apache-2.0 OR MIT | `runtime/deps/include/` |
 | Vulkan Memory Allocator 3.4.0, header (the licence text is its header comment) | https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/tree/v3.4.0 | MIT | `runtime/deps/include/vma/` |
 | Zstandard 1.5.7, built from the release tarball into a static `libzstd.a` with the folder's clang and sysroot | https://github.com/facebook/zstd/releases/tag/v1.5.7 | BSD-3-Clause | `runtime/deps/` |
+| dav1d 1.5.1, C decoder built from the source tag into a static `libdav1d.a` with the folder's clang and sysroot (the AV1 movies decode on the host) | https://github.com/videolan/dav1d | BSD-2-Clause | `runtime/deps/`, `licenses/dav1d-COPYING.txt` |
 | Ninja 1.13.2 (`ninja-linux.zip`) | https://github.com/ninja-build/ninja/releases/tag/v1.13.2 | Apache-2.0 | `bin/ninja` |
 | hactool (as in the installer release row above), built by `tools/build_hactool.py --cc` with the folder's clang and sysroot; includes its bundled mbedtls | https://github.com/SciresM/hactool | ISC; mbedtls Apache-2.0 | `bin/hactool` |
 | `nx2navi_xlate` (NativeAOT linux-x64 build of `tools/xlate/`, linked with the folder's clang, lld and sysroot) | built by `tools/build_xlate.py --llvm --sysroot` | MIT | `bin/nx2navi_xlate` |
