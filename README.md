@@ -3,7 +3,7 @@
 # NX2navi
 
 **NX2navi** is a static recompilation of *The Legend of Zelda: Ocarina of Time* for Nintendo Switch 2 (game
-version 1.1.1) into a native x86-64 application for Windows, with a Vulkan renderer
+version 1.1.1) into a native x86-64 application for Windows and Linux, with a Vulkan renderer
 ([docs/architecture.md](docs/architecture.md)).
 
 > [!IMPORTANT]
@@ -17,6 +17,10 @@ version 1.1.1) into a native x86-64 application for Windows, with a Vulkan rende
 Early development, playable. Kokiri Forest, Kakariko Village, Death Mountain Trail and its crater, the Temple of
 Time and the Great Fairy fountains play at 60 fps and above on current GPUs, from the title screen and from saves.
 Visual bugs and occasional crashes are still expected ([Known issues](#known-issues)).
+
+On Linux the same areas play at 60 fps on RADV (RX 7800 XT) and NVIDIA (RTX 3060) with 1.2.1; 1.4.3 runs on RADV
+(RX 6600, and the Vega 7 of a Ryzen 5 4600G at about 34 fps). Long play sessions and the Steam Deck itself are not
+verified yet.
 
 Report problems as issues, following [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -54,9 +58,28 @@ it; afterwards it keeps the port up to date and rebuilds only what changed ([doc
 building from source. Settings are in the in-game menu and in `nx2navi.ini` ([nx2navi.ini.example](nx2navi.ini.example)
 lists every key). Controls: [docs/controls.md](docs/controls.md).
 
-Requirements: Windows 10 or later; an x86-64 CPU with SSE4.2 (AVX2/FMA machines get a faster build); 16 GB of RAM; about
-30 GB free for the game and 1.5 GB for the launcher and its tools; a GPU with Vulkan 1.3, `VK_EXT_external_memory_host`
-and `VK_EXT_mesh_shader`. The setup is not signed, so SmartScreen warns on its first start.
+Requirements: Windows 10 or later, or Linux with kernel 6.7 or later (the write watch) and glibc 2.34 or later
+(Ubuntu 22.04, Debian 12, Fedora 35, SteamOS 3); an x86-64 CPU with SSE4.2 (AVX2/FMA machines get a faster build);
+16 GB of RAM; about 30 GB free for the game and 1.5 GB for the setup and its tools; a GPU with Vulkan 1.3,
+`VK_EXT_external_memory_host` and `VK_EXT_mesh_shader` (RADV and the NVIDIA driver are tested on Linux). The Windows
+setup is not signed, so SmartScreen warns on its first start.
+
+### Linux
+
+Download `NX2navi-Setup-x86_64.AppImage` from the releases, make it executable and start it (on a Steam Deck, from
+Desktop Mode):
+
+```sh
+chmod +x NX2navi-Setup-x86_64.AppImage
+./NX2navi-Setup-x86_64.AppImage
+```
+
+It is the same setup as the Windows installer and needs nothing installed beyond a desktop session: it finds the dump,
+downloads its build tools, extracts the game, builds it on this PC and starts it, and afterwards keeps the port up to
+date. The AppImage carries its own runtime, so no libfuse2 is needed. The built game is `nx2navi` in the folder you
+pick, with `libSDL3.so.0` beside it; the setup's temp folder is `.setup-temp` there too, so a full home partition does
+not matter. [docs/building.md](docs/building.md) has the build steps and
+[docs/installer.md](docs/installer.md) the folder's layout.
 
 ## Known issues
 
@@ -64,6 +87,8 @@ and `VK_EXT_mesh_shader`. The setup is not signed, so SmartScreen warns on its f
   driver builds what it has not seen; later starts are smooth.
 - A rare crash in the game's particle code.
 - DLSS Frame Generation is not offered yet: AMD FSR 3.1 frame generation works on every GPU, NVIDIA's included.
+- On Linux, DLSS and DLSS Frame Generation are not offered (NVIDIA's libraries are Windows-only); FSR 3.1 upscaling and
+  frame generation are. Long sessions and the Steam Deck are not verified yet.
 
 ## License
 
@@ -77,8 +102,10 @@ of Zelda*, *Ocarina of Time* and *Nintendo Switch* are trademarks of Nintendo.
 
 ## Building from source
 
-[docs/building.md](docs/building.md) lists the toolchain and the steps. Everything the build writes stays under
-`build\` and `generated\`, which git ignores; run `tools/check_content.py` before a commit.
+[docs/building.md](docs/building.md) lists the toolchain and the steps for Windows and Linux. Everything the build
+writes stays under `build\` and `generated\`, which git ignores; run `tools/check_content.py` before a commit.
+`tools/make_release_linux.py` assembles the Linux setup and packs it as `NX2navi-Setup-x86_64.AppImage`, built against
+the Steam Runtime 3 sysroot so it runs on SteamOS and any distribution at least as new.
 
 Most of the code and documentation is written by AI coding agents (Claude Code) under the maintainer's direction; the
 maintainer plays every build and decides what is merged. [AGENTS.md](AGENTS.md) holds the rules they work under.

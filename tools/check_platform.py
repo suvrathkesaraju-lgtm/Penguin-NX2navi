@@ -14,7 +14,13 @@ import sys
 from pathlib import Path
 
 # Per-file allowlist of shared files that still use Win32, with the reason. Empty: every shared file is portable.
-ALLOWED = {}
+ALLOWED = {
+    "input.c": "XInput gamepads, all behind #ifdef _WIN32; Linux reads gamepads through SDL3 (input_sdl.c)",
+    "vk_dlaa.c": "DLSS's nvngx_dlss.dll, behind #ifdef _WIN32; DLSS is not offered on Linux",
+    "vk_dlssg.c": "DLSS Frame Generation's helper DLL, behind #ifdef _WIN32; not offered on Linux",
+    "vk_ffx.cpp": "AMD's amd_fidelityfx_vk.dll, loaded behind #ifdef _WIN32; the Linux build keeps FSR 3.1 off",
+    "vk_fg.cpp": "<windows.h> for the FSR 3.1 frame generation swapchain, behind #ifdef _WIN32",
+}
 
 INCLUDE = re.compile(r'^\s*#\s*include\s*[<"](windows|winsock2|ws2tcpip|synchapi|memoryapi|processthreadsapi|'
                      r'fileapi|handleapi|libloaderapi|winbase|winnt)\.h[>"]', re.M)

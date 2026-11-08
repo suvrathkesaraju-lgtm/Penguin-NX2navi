@@ -178,12 +178,16 @@ Scripted runs from saves (`tools/run_game.py`) add to the same file. Then:
 writes `build\pgo\pgo-v143.profdata` and its record (`.json`: the `recomp/` tree it fits). `make_release.py` ships every
 profile of `build\pgo` in `data\` and warns when a record names another `recomp/` tree than the one released.
 
-## Linux (in progress)
+## Linux
 
 The runtime builds and runs on x86-64 Linux with a window, input and menu on SDL3 (`*_sdl.c`) in place of the Win32
 files (`*_win.c`); `runtime/platform/linux.c` implements `platform.h`. Status: the selftest and the probes pass; 1.2.1
 plays at 60 fps on RADV (RX 7800 XT) and NVIDIA (RTX 3060); 1.4.3 builds, probes and plays on RADV (RX 6600, and the
 Vega 7 of a Ryzen 5 4600G at about 34 fps). Long play sessions and the Steam Deck itself are not verified yet.
+
+The players' Linux release is the setup AppImage of [installer.md](installer.md) ("Linux release"):
+`tools/make_release_linux.py` assembles it from the same installer and the runtime library, built against the Steam
+Runtime 3 sysroot, and packs it with appimagetool.
 
 Requirements:
 

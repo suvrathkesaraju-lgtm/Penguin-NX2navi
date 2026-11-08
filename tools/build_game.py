@@ -154,6 +154,10 @@ else:
                   '"-Wl,-Map=$builddir/nx2navi.map"']
     LINK_LIBS = ['-lvulkan', '-lSDL3', '-lopus', '-lvpx', '-lzstd', '-l:libstdc++.a', '-lm', '-lpthread', '-ldl']
     VMA_INCLUDE = Path('/usr/include')   # vk_mem_alloc.h; Arch (AUR) vulkan-memory-allocator, Debian libvulkan-memory-allocator-dev
+    # The FidelityFX API headers (runtime/third_party/ffx_api, unmodified as AMD ships them) mark their entry points
+    # __declspec(dllexport), which clang reads off Windows only with this flag. FSR 3.1's library is a Windows DLL, so
+    # the Linux build compiles the loader and the off switch, never a call into it.
+    RT_FLAGS.append('-fdeclspec')
 # Without a system vk_mem_alloc.h, the header the Windows release pins (tools/make_release.py, VMA 3.4.0) is fetched once
 # into toolchain/vma: one MIT header (THIRD_PARTY_NOTICES.md), checked against its hash.
 VMA_FETCH = ('https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/v3.4.0/include/vk_mem_alloc.h',
